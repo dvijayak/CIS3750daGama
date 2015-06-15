@@ -26,13 +26,22 @@ int main (int argc, char** argv)
 		Quit();
 	}
 
-	// Listen on a TCP socket for incoming connections and respond when connected
-	pNetMan->Listen(5);
+	// Set up our server TCP socket
+	pNetMan->OpenSocket();
 
-	// Say hi?
-	console("YO");
+	// Begin main loop
+	console("Waiting for first connection...");
+	size_t count = 0;
+	while (true)
+	{
+		// Listen for incoming connections
+		pNetMan->Listen();
 
+		// Read from all clients
+		pNetMan->ReadClients();
 
+		// console(count++);
+	}
 
 	Quit();
 

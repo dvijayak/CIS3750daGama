@@ -2,7 +2,7 @@ import os
 
 # SCons options
 
-SetOption('num_jobs', 4)      # Parallelize
+SetOption('num_jobs', 1)      # Parallelize
 
 # clang build environment
 
@@ -38,14 +38,14 @@ clang = Environment(
 
       ### Flags ###
 
-      CPPFLAGS = Split('-Wall -pedantic -std=c++11'),
+      CPPFLAGS = Split('-g -Wall -pedantic -std=c++11'),
 
       ### Libs ###
 
       LIBS = Split('m SDL2 SDL2_net'),
       LIBPATH = Split('/usr/lib usr/local/lib')
    )
-clang['ENV']['LD_LIBRARY_PATH'] = '/usr/local/lib'
+clang['ENV']['LD_LIBRARY_PATH'] = '/usr/local/lib' # Need to add this or else I get a silly cannot find libsdl_net.so.0 error
 
 clang_debug = clang.Clone()
 clang_debug.Append(CPPFLAGS = '-g')

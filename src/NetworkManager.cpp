@@ -1,5 +1,6 @@
 #include "NetworkManager.hpp"
 
+#include <sstream>
 #include "NetworkClient.hpp"
 
 NetworkManager::NetworkManager ()
@@ -11,6 +12,10 @@ NetworkManager::NetworkManager ()
 	{
 		m_bFailed = true;
 	}
+
+	// Subscribe to self for certain useful events
+	Subscribe(this, NetworkManager::EV_NEWCONN);
+	Subscribe(this, NetworkManager::EV_RECVMSSG);
 
 	trclog("Network manager initialized.");
 }
@@ -28,46 +33,94 @@ NetworkManager::~NetworkManager ()
 	trclog("Network manager destroyed.");
 }
 
-bool NetworkManager::Listen (size_t n)
+void NetworkManager::Notify (Subject* pSubj, int event_id, const void* new_val, const void* old_val)
 {
-	// Open up a TCP socket
-	IPaddress ip;
-	if (SDLNet_ResolveHost(&ip, 0, PORT) == -1)
+	switch (event_id)
+	{
+		case NetworkManager::EV_NEWCONN:
+		{
+			// Spawn a new client
+			// SpawnClient();
+			console("New connection!");
+		}
+		break;
+	}
+}
+
+bool NetworkManager::OpenSocket ()
+{
+	// Open up a TCP socket	
+	if (SDLNet_ResolveHost(&m_ip, 0, PORT) == -1)
 	{
 		errlog("Couldn't resolve host: " << std::endl << SDLNet_GetError());
 		return false;
-	}
-	TCPsocket serversock = SDLNet_TCP_Open(&ip);
-	if (!serversock)
+	}	
+	m_serversock = SDLNet_TCP_Open(&m_ip);
+	if (!m_serversock)
 	{
 		errlog("Couldn't open server socket: " << std::endl << SDLNet_GetError());
 		return false;
 	}
 
-	// Listen for n (or infinite if n is 0) connections
-	for (size_t i = 0; i < n && n != 0; ++i)
+	return true;
+}
+
+bool NetworkManager::Listen ()
+{
+	// Listen for an incoming connection
+	TCPsocket newconn = SDLNet_TCP_Accept(m_serversock);
+	if (!newconn)
 	{
-		// (Begin BLOCKING)
-		console("Waiting for connection...");
-		TCPsocket newconn;
-		do
-		{
-			newconn = SDLNet_TCP_Accept(serversock);
-		} while (!newconn);
-		// (End BLOCKING)
-
-		console("\tConnection established!");
-
-		// Spawn a new client
-		m_clients.push_back(NetworkClient(newconn, "client"));
+		return false;
 	}
+
+	console("Connection established!");
+
+	// Spawn a new client and let the world know that it has connected!
+	Emit(NetworkManager::EV_NEWCONN, (void*)&(SpawnClient(newconn)));
 
 	return true;
 }
 
-bool NetworkManager::Read (TCPsocket& sock, char* data, size_t n) const
+// TODO: should be const ret val?
+NetworkClient& NetworkManager::SpawnClient (TCPsocket& newconn)
+{
+	std::stringstream client_name;
+	client_name << "Client" << m_clients.size()+1;
+	m_clients.push_back(NetworkClient(newconn, client_name.str()));
+
+	// Subscribe this client to the manager for I/O events
+	// Note: we use the object from the clients list so that the
+	// reference is valid for the entire duration of the manager object.
+	// Recall that the std::vector takes ownership of all its elements
+	// and manages their lifecycle.
+	// TODO: should be made thread-safe
+	Subscribe(&(m_clients.back()), NetworkManager::EV_RECVMSSG);
+
+	// TODO: should be made thread-safe
+	return m_clients.back();
+}
+
+void NetworkManager::ReadClients ()
+{
+	// Go through all clients and read from their sockets
+	for (const NetworkClient& client : m_clients)
+	{
+		std::string message;
+		bool result = ReadMessage(client.GetSocket(), message);
+		if (result)
+		{
+			// Successful read; let observers know
+			Emit(NetworkManager::EV_RECVMSSG, (void*)message.c_str());
+		}
+	}
+}
+
+bool NetworkManager::Read (const TCPsocket& sock, char* data, size_t n) const
 {	
+	// console("READ1");
 	int result = SDLNet_TCP_Recv(sock, (void*)data, n);
+	// console("\tREAD2");
 	if (result <= 0)
 	{
 		errlog("Error reading from socket: " << std::endl << SDLNet_GetError());
@@ -77,9 +130,9 @@ bool NetworkManager::Read (TCPsocket& sock, char* data, size_t n) const
 	return true;
 }
 
-bool NetworkManager::Write (TCPsocket& sock, const char* data, size_t n) const
+bool NetworkManager::Write (const TCPsocket& sock, const char* data, size_t n) const
 {
-	int result = SDLNet_TCP_Send(sock, (void*)data, n);
+	size_t result = SDLNet_TCP_Send(sock, (const void*)data, n);
 	if (result < n)
 	{
 		errlog("Error writing to socket: " << std::endl << SDLNet_GetError() << std::endl << "(We should probably close the socket)");
@@ -89,7 +142,7 @@ bool NetworkManager::Write (TCPsocket& sock, const char* data, size_t n) const
 	return true;
 }
 
-bool NetworkManager::SendMessage (TCPsocket& sock, MessageName name, size_t n_args, ...) const
+bool NetworkManager::SendMessage (const TCPsocket& sock, MessageName name, size_t n_args, ...) const
 {
 	if (name.str() == "")
 	{
@@ -125,7 +178,36 @@ bool NetworkManager::SendMessage (TCPsocket& sock, MessageName name, size_t n_ar
 	return Write(sock, std::string(name.str() + ":" + message).c_str(), message.size());
 }
 
-bool NetworkManager::ReadMessage (TCPsocket& sock, std::string& message) const
+bool NetworkManager::ReadMessage (const TCPsocket& sock, std::string& message) const
 {
+	// Keep reading a byte until we reach a newline
+	// TODO: should be a class constant
+	std::vector<char> buffer;
+	while (true)
+	{
+		// Read the next byte
+		char byte;
+		bool result = Read(sock, &byte, 1);
+		console(result << " " << byte);
+		if (!result)
+		{
+			return false;
+		}
+
+		// If it is a newline, break
+		if (byte == '\n')
+		{
+			break;
+		}
+		// Else, append to buffer
+		else
+		{
+			buffer.push_back(byte);
+		}
+	}
+
+	// Convert byte buffer to string
+	message = std::string(buffer.begin(), buffer.end());
+
 	return true;
 }

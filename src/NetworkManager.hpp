@@ -4,13 +4,23 @@
 #include "global.hpp"
 
 #include <cstdarg>
+#include "Subject.hpp"
+#include "IObserver.hpp"
 
 class SDLManager;
 class NetworkClient;
 
 class NetworkManager
+	: public Subject
+	, public IObserver
 {
 public:
+	enum EventEnum
+	{
+		EV_NEWCONN, // a new client has connected
+		EV_RECVMSSG, // a new message has been received
+	};
+
 	// This class encapsulates the "name" or "function" part of a message
 	// to/from a client and thus enforces conformance to the specification.
 	class MessageName
@@ -53,26 +63,34 @@ public:
 		int m_value;
 	};
 	
-	~NetworkManager ();
+	virtual ~NetworkManager ();
 
-	// Listen to the next n incoming connections and spawn a new client.
-	// If n is 0, then we listen for an infinite number of connections (probably a
-	// bad idea).
-	// Note: this function is BLOCKING
-	bool Listen (size_t n=0);
+	void Notify (Subject*, int, const void*, const void*);
+
+	// Open a TCP server socket
+	bool OpenSocket ();
+
+	// Listen to an incoming connection and respond.
+	bool Listen ();
+
+	// Spawn a new client
+	NetworkClient& SpawnClient (TCPsocket& newconn);
+
+	// Check all client sockets for any input
+	void ReadClients ();
 
 	// Read the specified amount of raw bytes from the given socket
 	// Caller is responsible to ensure that data can hold n bytes
-	bool Read (TCPsocket& sock, char* data, size_t n) const;
+	bool Read (const TCPsocket& sock, char* data, size_t n) const;
 
 	// Write the specified amount of raw bytes to the given socket
-	bool Write (TCPsocket& sock, const char* data, size_t n) const;
+	bool Write (const TCPsocket& sock, const char* data, size_t n) const;
 
 	// Send a specification-compliant message to the given client
-	bool SendMessage (TCPsocket& sock, MessageName name, size_t n_args, ...) const;
+	bool SendMessage (const TCPsocket& sock, MessageName name, size_t n_args, ...) const;
 
 	// Read a newline-terminated (as per spec) message from the given client
-	bool ReadMessage (TCPsocket& sock, std::string& message) const;
+	bool ReadMessage (const TCPsocket& sock, std::string& message) const;
 
 public:
 	static const size_t PORT = 5283;
