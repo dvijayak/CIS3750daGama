@@ -1,3 +1,5 @@
+// YOOO JAMMM
+
 var net = require('net'); // TCP
 var util = require('util'); // logging
 var Player = require('./Player');
@@ -12,6 +14,8 @@ var allPlayers = {};
 function serveNewConnection (socket)
 {
 	puts("Client connected!");
+
+	var newPlayer = new Player('asd', socket);
 
 	socket.on('end', function () {
 		puts("Client disconnected :(");
