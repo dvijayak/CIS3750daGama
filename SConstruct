@@ -1,8 +1,8 @@
 import os
+from subprocess import check_output
 
 # SCons options
-
-SetOption('num_jobs', 1)      # Parallelize
+SetOption('num_jobs', check_output(['nproc']) or 1)      # Parallelize
 
 # clang build environment
 
