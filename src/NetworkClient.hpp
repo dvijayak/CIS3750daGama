@@ -9,19 +9,26 @@ class NetworkClient
 	: public IObserver
 {
 public:
+	// The TCPsocket type is an opaque POINTER
 	NetworkClient (const TCPsocket& socket, const std::string& name)
 		: m_socket(socket)
 		, m_suid(++s_suidCount)
 		, m_name(name)
 		, m_pThread(0)
-	{}
+	{
+		Initialize();
+	}
 
 	NetworkClient (const NetworkClient& other)
 		: m_socket(other.m_socket)
 		, m_suid(++s_suidCount)
 		, m_name(other.m_name)
 		, m_pThread(other.m_pThread)
-	{}
+	{
+		Initialize();
+	}
+
+	~NetworkClient ();
 
 	NetworkClient& operator= (const NetworkClient& other)
 	{
@@ -33,7 +40,7 @@ public:
 		return *this;
 	}
 
-	void Notify (Subject*, int, const void*, const void*);
+	void Notify (const Subject*, int, const void*, const void*);
 
 	typedef int (*ThreadFunction) (void*);
 	// Spawn a new thread for the client and continue processing
@@ -43,6 +50,8 @@ public:
 	bool Spawn (NetworkClient::ThreadFunction fn=NetworkClient::DefaultThreadFunction);
 
 private:
+	void Initialize ();
+
 	// Default function to be executed when a new client thread is spawned
 	static int DefaultThreadFunction (void*);
 
@@ -68,6 +77,12 @@ public:
 	}
 
 	inline const std::string& GetName () const
+	{
+		return m_name;
+	}
+
+	// String rep
+	inline std::string str () const
 	{
 		return m_name;
 	}

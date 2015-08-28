@@ -38,7 +38,7 @@ int main (int argc, char** argv)
 		pNetMan->Listen();
 
 		// Read from all clients
-		pNetMan->ReadClients();
+		// pNetMan->ReadClients();
 
 		// console(count++);
 	}

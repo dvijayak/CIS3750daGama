@@ -1,35 +1,90 @@
 #include "NetworkClient.hpp"
 
+#include "SDLManager.hpp"
 #include "NetworkManager.hpp"
 
 size_t NetworkClient::s_suidCount = 0;
 
-void NetworkClient::Notify (Subject* pSubj, int event_id, const void* new_val, const void* old_val)
+NetworkClient::~NetworkClient ()
 {
-	switch (event_id)
-	{
-		case NetworkManager::EV_RECVMSSG:
-		{
-			// Print out the message for now
-			if (new_val)
-			{
-				console("Received message: " << std::string((const char*)new_val));
-			}
-		}
-		break;
-	}
+	// TODO: Perform cleanup as necessary EXCEPT FOR SOCKET CLOSING
+}
+
+void NetworkClient::Notify (const Subject* pSubj, int event_id, const void* new_val, const void* old_val)
+{
+	// switch (event_id)
+	// {
+	// 	case NetworkManager::EV_RECVMSSG:
+	// 	{
+	// 		// Print out the message for now
+	// 		if (new_val)
+	// 		{
+	// 			console("Received message: " << std::string((const char*)new_val));
+	// 		}
+	// 	}
+	// 	break;
+	// }
+}
+
+void NetworkClient::Initialize ()
+{
+	// TODO
 }
 
 int NetworkClient::DefaultThreadFunction (void* data)
 {
-	// Print out the client's name
-	if (data)
+	NetworkClient* pClient = static_cast<NetworkClient*>(data); // Should always succeed
+	if (!pClient)
 	{
-		NetworkClient* pClient = static_cast<NetworkClient*>(data); // Should always succeed
-		console("We are on thread " << SDL_GetThreadID(0) << ". The client's name is " << pClient->GetName());
+		errlog("Couldn't retrieve NetworkClient even though that is what was passed.");
+		return 0;
 	}
 
-	return 1;
+	NetworkManager* pNM = SDLManager::Instance()->GetNetworkManager();
+	if (!pNM)
+	{
+		errlog("Couldn't retrieve NetworkManager.");
+		return 0;
+	}
+
+	// Keep listening for and reacting to messages from the socket
+	bool bError = false;
+	std::string message;
+	console(pClient->GetName() << "[Thread id " << SDL_GetThreadID(0) << "] is listening for messages now...");
+	while (true)
+	{
+		// Go through all clients and read from their sockets
+		bool result = pNM->ReadMessage(pClient->GetSocket(), message);
+		if (result)
+		{
+			// TODO: Print out the message for now
+			console("Received message from " << pClient->str() << ": " << message);
+
+			// Successful read; let observers know
+			// pClient->Emit(NetworkManager::EV_RECVMSSG, (void*)message.c_str());
+
+			message.clear();
+		}
+		else
+		{
+			// An error occurred reading; most likely a socket error, so just quit for now
+			bError = true;
+			errlog("An error occurred while reading. Most likely a socket error so just disconnect for now.");
+
+			// TODO: Inform Network Manager that client has disconnected
+			// pClient->Emit(NetworkClient::EV_DISCONNECT, (void*)this);
+
+			break;
+		}
+	}
+
+	// Close the socket
+	SDLNet_TCP_Close(pClient->GetSocket());
+
+	// TODO: Inform Network Manager that client has quit
+	// pClient->Emit(NetworkClient::EV_QUIT, (void*)this);
+
+	return (int)!bError;
 }
 
 bool NetworkClient::Spawn (NetworkClient::ThreadFunction fn)
@@ -43,13 +98,11 @@ bool NetworkClient::Spawn (NetworkClient::ThreadFunction fn)
 		return false;
 	}
 
-	// // We detach the thread as it will be running by itself for a long time
-	// // It can interact with clients easily via the NetworkManager singleton
-	// // Only thing is we cannot catch return code, so we will have to figure out
-	// // a different way to handle errors.
-	// SDL_DetachThread(m_pThread);
-	int retval;
-	SDL_WaitThread(m_pThread, &retval);
+	// We detach the thread as it will be running by itself for a long time
+	// It can interact with clients easily via the NetworkManager singleton
+	// Only thing is we cannot catch return code, so we will have to figure out
+	// a different way to handle errors.
+	SDL_DetachThread(m_pThread);
 
 	return true;
 }

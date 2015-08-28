@@ -33,15 +33,17 @@ NetworkManager::~NetworkManager ()
 	trclog("Network manager destroyed.");
 }
 
-void NetworkManager::Notify (Subject* pSubj, int event_id, const void* new_val, const void* old_val)
+void NetworkManager::Notify (const Subject* pSubj, int event_id, const void* new_val, const void* old_val)
 {
 	switch (event_id)
 	{
 		case NetworkManager::EV_NEWCONN:
 		{
-			// Spawn a new client
-			// SpawnClient();
-			console("New connection!");
+			const NetworkClient* pClient = (const NetworkClient*)new_val;
+			if (pClient)
+			{
+				console("New connection: "<< pClient->GetName() << " has connected!");
+			}
 		}
 		break;
 	}
@@ -82,12 +84,28 @@ bool NetworkManager::Listen ()
 	return true;
 }
 
-// TODO: should be const ret val?
 NetworkClient& NetworkManager::SpawnClient (TCPsocket& newconn)
 {
 	std::stringstream client_name;
 	client_name << "Client" << m_clients.size()+1;
 	m_clients.push_back(NetworkClient(newconn, client_name.str()));
+
+	// IMPORTANT:
+	// The statement m_clients.push_back(NetworkClient(newconn, client_name.str()));
+	// will do the following:
+	//		1. Create a new NetworkClient object.
+	//		2. Pass a copy of this object to push_back.
+	// Step 2 results in the invoking of the constructor of the copy
+	// AS WELL AS THE destructor of the original object when the calling
+	// method (in this case, NetworkManager::SpawnClient) returns, since
+	// the original will go out of scope. Thus, it was decided to move away
+	// thread spawning and socket closing from the constructor and destructor
+	// and perform them explicitly/independently when needed.
+
+	NetworkClient& newclient = m_clients.back();
+
+	// Spawn a new thread for this client
+	newclient.Spawn();
 
 	// Subscribe this client to the manager for I/O events
 	// Note: we use the object from the clients list so that the
@@ -95,10 +113,10 @@ NetworkClient& NetworkManager::SpawnClient (TCPsocket& newconn)
 	// Recall that the std::vector takes ownership of all its elements
 	// and manages their lifecycle.
 	// TODO: should be made thread-safe
-	Subscribe(&(m_clients.back()), NetworkManager::EV_RECVMSSG);
+	Subscribe(&newclient, NetworkManager::EV_RECVMSSG);
 
 	// TODO: should be made thread-safe
-	return m_clients.back();
+	return newclient;
 }
 
 void NetworkManager::ReadClients ()
@@ -188,7 +206,6 @@ bool NetworkManager::ReadMessage (const TCPsocket& sock, std::string& message) c
 		// Read the next byte
 		char byte;
 		bool result = Read(sock, &byte, 1);
-		console(result << " " << byte);
 		if (!result)
 		{
 			return false;

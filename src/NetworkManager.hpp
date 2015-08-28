@@ -65,7 +65,7 @@ public:
 	
 	virtual ~NetworkManager ();
 
-	void Notify (Subject*, int, const void*, const void*);
+	void Notify (const Subject*, int, const void*, const void*);
 
 	// Open a TCP server socket
 	bool OpenSocket ();
