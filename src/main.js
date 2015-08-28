@@ -5,54 +5,20 @@ var Player = require('./Player');
 // Conveniences
 var puts = console.log;
 
-// var NavalNGage = function ()
-// {
+// App begins
 
-// }
+var allPlayers = {};
 
-var handlers = {
-	newconn: function (socket) {
-		puts("Client connected!");
+function serveNewConnection (socket)
+{
+	puts("A new client has connected...");
 
-		socket.on('end', function () {
-			puts("Client disconnected :(");
-		});
-
-		// socket.on('data', handlers.newdata);
-		socket.on('data', function (data) {
-			// Strip out trailing and leading whitespace
-			message = data.toString('ascii').trim();
-
-			puts(message);
-			if (message == 'ready;')
-			{
-				var p = new Player('asd', socket);
-				p.SendMessage('registered')
-			}
-		});
-	},
-
-	// newdata: function (data) {
-	// 	// Strip out trailing and leading whitespace
-	// 	message = data.toString('ascii').trim();
-
-	// 	puts(message);
-	// 	if (message == 'ready;')
-	// 	{
-	// 		var p = new Player('asd')
-	// 	}
-	// },
-};
-
-// var message_handlers = {
-// 	"register":,
-// 	"ready":,
-
-// };
-
+	var newPlayer = new Player(socket);
+	allPlayers[newPlayer.GetID()] = newPlayer;
+}
 
 // Set up a TCP server socket and listen for incoming connections
-var server = net.createServer(handlers.newconn);
+var server = net.createServer(serveNewConnection);
 // TODO: configure port
 server.listen(5283, function () {
 	puts("Awaiting client connections...");
