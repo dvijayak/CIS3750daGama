@@ -3,12 +3,22 @@
 
 #include "global.hpp"
 
+#include "Subject.hpp"
 #include "IObserver.hpp"
 
 class NetworkClient
-	: public IObserver
+	: public Subject
+	, public IObserver
 {
 public:
+	// const static Event s_Event_EV_NetworkClient_DISCONNECT = Event();
+
+	enum EventEnum
+	{
+		EV_DISCONNECT, // Client has disconnected unexpectedly
+		EV_QUIT // Client has disconnected normally (most likely due to the associated player quitting the game)
+	};
+
 	// The TCPsocket type is an opaque POINTER
 	NetworkClient (const TCPsocket& socket, const std::string& name)
 		: m_socket(socket)
@@ -48,6 +58,11 @@ public:
 	// int (*) (void*) is expected as input. If not provided,
 	// then the default implementation is executed.
 	bool Spawn (NetworkClient::ThreadFunction fn=NetworkClient::DefaultThreadFunction);
+
+	bool operator== (const NetworkClient& other) const
+	{
+		return m_suid == other.m_suid; // TODO: Is this sufficient?
+	}
 
 private:
 	void Initialize ();

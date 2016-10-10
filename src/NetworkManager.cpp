@@ -35,17 +35,38 @@ NetworkManager::~NetworkManager ()
 
 void NetworkManager::Notify (const Subject* pSubj, int event_id, const void* new_val, const void* old_val)
 {
+	const NetworkClient* pClient = (const NetworkClient*)new_val;
+
 	switch (event_id)
 	{
 		case NetworkManager::EV_NEWCONN:
 		{
-			const NetworkClient* pClient = (const NetworkClient*)new_val;
 			if (pClient)
 			{
 				console("New connection: "<< pClient->GetName() << " has connected!");
 			}
 		}
 		break;
+		// case NetworkClient::EV_DISCONNECT:
+		// {
+		// 	if (pClient)
+		// 	{
+		// 		console(pClient->str() << " has disconnected!");
+		// 	}
+
+		// 	// TODO: remember client somehow so that upon reconnection, we can re-establish the client
+		// }
+		// case NetworkClient::EV_QUIT:
+		// {
+		// 	if (pClient)
+		// 	{
+		// 		console(pClient->str() << " has quit!");
+
+		// 		// Delete the client
+		// 		m_clients.erase(std::find(m_clients.begin(), m_clients.end(), *pClient));
+		// 		console("SIZE OF " << m_clients.size());
+		// 	}
+		// }
 	}
 }
 
@@ -90,6 +111,11 @@ NetworkClient& NetworkManager::SpawnClient (TCPsocket& newconn)
 	client_name << "Client" << m_clients.size()+1;
 	m_clients.push_back(NetworkClient(newconn, client_name.str()));
 
+	// We use the object from the clients list so that the reference is valid
+	// for the entire duration of the manager object. Recall that the std::vector
+	// takes ownership of all its elements and manages their lifecycle.
+	NetworkClient& newclient = m_clients.back();
+
 	// IMPORTANT:
 	// The statement m_clients.push_back(NetworkClient(newconn, client_name.str()));
 	// will do the following:
@@ -102,20 +128,13 @@ NetworkClient& NetworkManager::SpawnClient (TCPsocket& newconn)
 	// thread spawning and socket closing from the constructor and destructor
 	// and perform them explicitly/independently when needed.
 
-	NetworkClient& newclient = m_clients.back();
-
-	// Spawn a new thread for this client
+	// Spawn a new thread for the client
 	newclient.Spawn();
 
-	// Subscribe this client to the manager for I/O events
-	// Note: we use the object from the clients list so that the
-	// reference is valid for the entire duration of the manager object.
-	// Recall that the std::vector takes ownership of all its elements
-	// and manages their lifecycle.
-	// TODO: should be made thread-safe
-	Subscribe(&newclient, NetworkManager::EV_RECVMSSG);
+	// Subscribe to the client (and vice versa, if necessary) for various events
+	newclient.Subscribe(this, NetworkClient::EV_DISCONNECT);
+	newclient.Subscribe(this, NetworkClient::EV_QUIT);
 
-	// TODO: should be made thread-safe
 	return newclient;
 }
 

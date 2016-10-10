@@ -3,6 +3,8 @@
 #include "SDLManager.hpp"
 #include "NetworkManager.hpp"
 
+#define _CLIENT_(X) X->GetName() << " [Thread id " << SDL_GetThreadID(0) << "] "
+
 size_t NetworkClient::s_suidCount = 0;
 
 NetworkClient::~NetworkClient ()
@@ -50,7 +52,7 @@ int NetworkClient::DefaultThreadFunction (void* data)
 	// Keep listening for and reacting to messages from the socket
 	bool bError = false;
 	std::string message;
-	console(pClient->GetName() << "[Thread id " << SDL_GetThreadID(0) << "] is listening for messages now...");
+	console(_CLIENT_(pClient) << "Listening for messages now...");
 	while (true)
 	{
 		// Go through all clients and read from their sockets
@@ -58,7 +60,7 @@ int NetworkClient::DefaultThreadFunction (void* data)
 		if (result)
 		{
 			// TODO: Print out the message for now
-			console("Received message from " << pClient->str() << ": " << message);
+			console(_CLIENT_(pClient) << "Received message: " << message);
 
 			// Successful read; let observers know
 			// pClient->Emit(NetworkManager::EV_RECVMSSG, (void*)message.c_str());
@@ -69,10 +71,10 @@ int NetworkClient::DefaultThreadFunction (void* data)
 		{
 			// An error occurred reading; most likely a socket error, so just quit for now
 			bError = true;
-			errlog("An error occurred while reading. Most likely a socket error so just disconnect for now.");
+			errlog(_CLIENT_(pClient) << "An error occurred while reading. Most likely a socket error so just disconnect for now.");
 
 			// TODO: Inform Network Manager that client has disconnected
-			// pClient->Emit(NetworkClient::EV_DISCONNECT, (void*)this);
+			// pClient->Emit(NetworkClient::EV_DISCONNECT, (void*)pClient);
 
 			break;
 		}
@@ -81,8 +83,11 @@ int NetworkClient::DefaultThreadFunction (void* data)
 	// Close the socket
 	SDLNet_TCP_Close(pClient->GetSocket());
 
-	// TODO: Inform Network Manager that client has quit
-	// pClient->Emit(NetworkClient::EV_QUIT, (void*)this);
+	if (!bError)
+	{
+		// TODO: Inform Network Manager that client has quit
+		// pClient->Emit(NetworkClient::EV_QUIT, (void*)pClient);
+	}
 
 	return (int)!bError;
 }
